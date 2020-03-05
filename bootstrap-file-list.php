@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Bootstrap File List
- * Plugin URI:        https://www.github.com/pl33
+ * Plugin URI:        https://github.com/pl33/wp-bootstrap-file-list
  * Description:       File browser using Bootstrap layout.
  * Version:           1.0.0
  * Requires at least: 5.2
@@ -29,19 +29,299 @@
  * along with this file . If not, see https://www.gnu.org/licenses/gpl-2.0.html.
  */
 
-class bootstrap_file_list
+namespace bootstrap_file_list {
+
+/**
+ * Information about a file is stored here. The class provides functions
+ * to retrieve file information and convert information to human-readable
+ * strings.
+ */
+class file_info
 {
+    /** @brief Full file path in the file system */
+    private $_path;
+    /** @brief URI with download or navigation link */
+    private $_uri;
+    /** @brief Type type: @c dir or @c file */
+    private $_type;
+    /** @brief File size in bytes */
+    private $_size;
+    /** @brief UNIX timestamp of last modification */
+    private $_mtime;
+
     /**
-     * The init hook registers the shortcode @c BSFileList
+     * Please use retrieve() or create_up() to create a file_info object.
      */
-    public static function init_hook()
+    private function __construct()
     {
-        add_shortcode(
-            'BSFileList',
-            'bootstrap_file_list::shortcode_BSFileList'
-        );
     }
 
+    /**
+     * @brief Read properties which are readable
+     *
+     * @param name Name of the property
+     * @return Value of the property
+     */
+    public function __get($name)
+    {
+        switch ($name) {
+        case 'path':
+            return $this->_path;
+        case 'name':
+            return basename($this->_path);
+        case 'uri':
+            return $this->_uri;
+        case 'type':
+            return $this->_type;
+        case 'size':
+            return $this->_size;
+        case 'mtime':
+            return $this->_mtime;
+        default:
+            throw new \TypeError('Property '. __CLASS__.'::'.$name.' is not readable.');
+        }
+    }
+
+    /**
+     * @brief Write properties if it is writable
+     *
+     * @param name Name of the property
+     * @param value New value of the property
+     */
+    public function __set($name, $value)
+    {
+        switch ($name) {
+        case 'uri':
+            if (is_string($value))
+                $this->_uri = $value;
+            else
+                throw new \TypeError('Property '. __CLASS__.'::'.$name.' is a string.');
+            break;
+        default:
+            throw new \TypeError('Property '. __CLASS__.'::'.$name.' is not writable.');
+        }
+    }
+
+    /**
+     * @brief File information is retrieved
+     *
+     * Following file information are gathered: File size, last modification time, type
+     * (directory or file)
+     *
+     * Both size and modification time are converted to strings. The size is printed in
+     * a human readable format (Bytes, kiB, MiB, ...). The rounding precision can be set
+     * in @c rounding_precision and is set to @c 2 by default.
+     *
+     * The time is printed in "Y-m-d, H:i:s O".
+     *
+     * @param file_path Path to the file
+     * @return File information entry
+     */
+    public static function retrieve($file_path): file_info
+    {
+        $info = new file_info();
+        $info->_uri = '';
+
+        // Query file stats
+        $info->_path = $file_path;
+        $stats = stat($file_path);
+
+        // Copy stats
+        $info->_mtime = $stats['mtime'];
+        if (is_dir($file_path)) {
+            $info->_type = 'dir';
+            $info->_size = -1;
+        } else {
+            $info->_type = 'file';
+            $info->_size = $stats['size'];
+        }
+
+        return $info;
+    }
+
+    /**
+     * This function creates a pseudo-entry whose name is "..". It can
+     * be used to link to the parent directory.
+     *
+     * @return File information entry
+     */
+    public static function create_up(): file_info
+    {
+        $info = new file_info();
+        $info->_uri = '';
+
+        $info->_path = '..';
+        $info->_type = 'dir';
+        $info->_size = -1;
+        $info->_mtime = -1;
+
+        return $info;
+    }
+
+    /**
+     * @brief Check if the file is a directory
+     *
+     * @return @c true if the file is a directory, @c false if the file is a regular file
+     */
+    public function is_dir(): bool
+    {
+        return ($this->_type == 'dir');
+    }
+
+    /**
+     * This function returns @c true if
+     * 1. the file is not a directory,
+     * 2. the regular expression is not empty, and
+     * 3. the regular expression does not match.
+     * On return of @c true, the file is filtered out and shall not
+     * be included in the output list.
+     *
+     * @param filter_regex Regular expression used to filter the file
+     * @return @c true if the file should not be included in the output list, @false
+     * if the file should be appended to output list
+     */
+    public function is_masked(string $filter_regex = ''): bool
+    {
+        $name = basename($this->_path);
+        if (!$this->is_dir() and ($filter_regex != '') and (preg_match($filter_regex, $name) != 1))
+            return true;
+        else
+            return false;
+    }
+
+    /**
+     * @brief Convert the file size to a human-readable string
+     *
+     * If there is no valid size, @c - is returned. Else, the size is
+     * converted to a string. The number is displayed as a number in
+     * bytes with the closest prefix. The size is rounded to the
+     * number digits after the decimal point which is set in
+     * @c rounding_precision.
+     *
+     * @param rounding_precision Number of digits after the decimal point
+     * @return File size as a human-readable string
+     */
+    public function human_readable_size($rounding_precision = 2): string
+    {
+        if ($this->_size < 0)
+            $size_str = '-';
+        elseif ($this->_size >= pow(2, 50))
+            $size_str = round($this->_size / pow(2, 50), $rounding_precision) . ' PiB';
+        elseif ($this->_size >= pow(2, 40))
+            $size_str = round($this->_size / pow(2, 40), $rounding_precision) . ' TiB';
+        elseif ($this->_size >= pow(2, 30))
+            $size_str = round($this->_size / pow(2, 30), $rounding_precision) . ' GiB';
+        elseif ($this->_size >= pow(2, 20))
+            $size_str = round($this->_size / pow(2, 20), $rounding_precision) . ' MiB';
+        elseif ($this->_size >= pow(2, 10))
+            $size_str = round($this->_size / pow(2, 10), $rounding_precision) . ' kiB';
+        else
+            $size_str = $this->_size . ' Bytes';
+
+        return $size_str;
+    }
+
+    /**
+     * @brief Convert the modification time to a string
+     *
+     * If there is no modification time, @c - is returned. If there is a valid
+     * modification time, the format will be 'Y-m-d, H:i:s O'.
+     *
+     * @return Modification time as a string
+     */
+    public function mtime_string(): string
+    {
+        if ($this->_mtime < 0)
+            return '-';
+        else
+            return date('Y-m-d, H:i:s O', $this->_mtime);
+    }
+
+    /**
+     * @brief Sort a file list
+     *
+     * A list of files is sorted. The sorting is controlled by the @c sorting argument
+     * as follows:
+     * * If @c sorting is @c name_asc: The list is sorted by the file name in ascending order.
+     * * If @c sorting is @c name_des: The list is sorted by the file name in descending order.
+     * * If @c sorting is @c mtime_asc: The list is sorted by the modification date in ascending order.
+     *   If two or more files were modified at the same time, they will be sorted by the file name in
+     *   ascending order.
+     * * If @c sorting is @c mtime_des: The list is sorted by the modification date in descending order.
+     *   If two or more files were modified at the same time, they will be sorted by the file name in
+     *   descending order.
+     * * If @c sorting is @c size_asc: The list is sorted by the file size in ascending order.
+     *   If two or more files are of same size, they will be sorted by the file name in
+     *   ascending order.
+     * * If @c sorting is @c size_des: The list is sorted by the file size in descending order.
+     *   If two or more files are of same size, they will be sorted by the file name in
+     *   descending order.
+     *
+     * @param entries Unsorted list of file entries
+     * @param sorting Sorting key and direction
+     * @return Sorted list of file entries
+     */
+    public static function sort(array $entries, string $sorting): array
+    {
+        $copy = $entries;
+        usort($copy, function ($a, $b) use($sorting) {
+            switch ($sorting) {
+            case 'name_asc':
+                return strcmp($a->name, $b->name);
+            case 'name_des':
+                return strcmp($b->name, $a->name);
+            case 'mtime_asc':
+                if ($a->mtime < $b->mtime)
+                    return -1;
+                elseif ($a->mtime > $b->mtime)
+                    return 1;
+                else
+                    return strcmp($a->name, $b->name);
+            case 'mtime_des':
+                if ($a->mtime < $b->mtime)
+                    return 1;
+                elseif ($a->mtime > $b->mtime)
+                    return -1;
+                else
+                    return strcmp($b->name, $a->name);
+            case 'size_asc':
+                if ($a->size < $b->size)
+                    return -1;
+                elseif ($a->size > $b->size)
+                    return 1;
+                else
+                    return strcmp($a->name, $b->name);
+            case 'size_des':
+                if ($a->size < $b->size)
+                    return 1;
+                elseif ($a->size > $b->size)
+                    return -1;
+                else
+                    return strcmp($b->name, $a->name);
+            default:
+                throw new \LogicException('Invalid sorting');
+            }
+        });
+        return $copy;
+    }
+}
+
+
+/**
+ * The main logic of the plugin is implemented here. The shortcode @c BSFileList
+ * is processed by this class. It will produce the HTML output of the file list
+ * view.
+ *
+ * The file list view supports a listing of the files of the current directory.
+ * Files can be filtered by regular expressions. The list can be sorted and it
+ * is possible to navigate into sub-folders.
+ *
+ * The file list view can be customized by values set in the $_GET array. See
+ * bootstrap_file_list::get_sub_key() and bootstrap_file_list::get_sorting_key()
+ * for details.
+ */
+class bootstrap_file_list
+{
     /**
      * Called by Wordpress to handle the shortcode @c BSFileList.
      *
@@ -64,12 +344,12 @@ class bootstrap_file_list
         try {
             // Check arguments
             if ($args['folder'] === false)
-                throw new RuntimeException('"folder" attribute is not set.');
+                throw new \RuntimeException('"folder" attribute is not set.');
 
             // Generate HTML code
             $plugin = new bootstrap_file_list($args['folder'], $args['filter'], $args['sorting'], $args['show_size'], $args['show_mtime']);
             return $plugin->get_html();
-        } catch (RuntimeException $e) {
+        } catch (\RuntimeException $e) {
             return 'BSFileList error: ' . $e->getMessage();
         }
     }
@@ -124,7 +404,7 @@ class bootstrap_file_list
     /**
      * @brief Class constructor
      */
-    public function __construct($folder, $filter = '', $sorting = 'name_asc', $show_size = true, $show_mtime = false)
+    public function __construct(string $folder, string $filter = '', string $sorting = 'name_asc', bool $show_size = true, bool $show_mtime = false)
     {
         $this->id = get_the_ID().'x'.hash("md5", $folder);
 
@@ -150,7 +430,7 @@ class bootstrap_file_list
      *
      * @return Parameter key of the sub-folder path
      */
-    private function get_sub_key()
+    private function get_sub_key(): string
     {
         return 'bsfilelist_'.$this->id.'_sub';
     }
@@ -161,7 +441,7 @@ class bootstrap_file_list
      *
      * @return Parameter key of the sorting key
      */
-    private function get_sorting_key()
+    private function get_sorting_key(): string
     {
         return 'bsfilelist_'.$this->id.'_sorting';
     }
@@ -179,7 +459,7 @@ class bootstrap_file_list
      * @param value Path which should be checked
      * @return Sanitized path
      */
-    private function sanitize_sub_path($path)
+    private function sanitize_sub_path(string $path): string
     {
         // Split path by /
         $old_list = explode('/', $path);
@@ -193,7 +473,7 @@ class bootstrap_file_list
                 if (count($new_list) > 0)
                     array_pop($new_list);
                 else
-                    throw new RuntimeExeption('Sanitizing error: Cannot traverse above root folder.');
+                    throw new \RuntimeException('Sanitizing error: Cannot traverse above root folder.');
             } else {
                 // Copy regular entries
                 array_push($new_list, $name);
@@ -212,7 +492,7 @@ class bootstrap_file_list
      * @param value Value which should be checked
      * @return Same value if valid or default value if invalid
      */
-    private function sanitize_sorting($value)
+    private function sanitize_sorting(string $value): string
     {
         if (in_array($value, array(
             'name_asc',
@@ -237,7 +517,7 @@ class bootstrap_file_list
      * The current folder must be a subfolder of the root folder. Otherwise,
      * a runtime exception will be thrown.
      */
-    private function make_folder_dir_info()
+    private function make_folder_dir_info(): void
     {
         // Get path and URI of Wordpress upload directory
         $upload_dir = wp_upload_dir();
@@ -262,12 +542,12 @@ class bootstrap_file_list
 
         // The current folder must exist
         if (!is_dir($this->folder_dir))
-            throw new RuntimeException('The path is not a directory.');
+            throw new \RuntimeException('The path is not a directory.');
 
         // Check that requested folder is a subfolder of the root folder
         $root_dir = rtrim($upload_dir['basedir'].'/'.$root_folder, '/');
         if (strpos($this->folder_dir, realpath($root_dir)) !== 0)
-            throw new RuntimeException('Cannot traverse above root folder.');
+            throw new \RuntimeException('Cannot traverse above root folder.');
     }
 
     /**
@@ -290,7 +570,7 @@ class bootstrap_file_list
      *
      * @return List of files
      */
-    private function get_file_list()
+    private function get_file_list(): array
     {
         // Read the content of the directory
         $files = scandir($this->folder_dir);
@@ -305,30 +585,21 @@ class bootstrap_file_list
 
             // Retrieve file information
             $file_path = $this->folder_dir . '/' . $file;
-            $file_info = $this->get_file_info($file_path);
+            $entry = file_info::retrieve($file_path);
 
             // Apply filter, if entry is not a directory
-            if (!is_dir($file_path) and ($this->filter != '') and (preg_match($this->filter, $file) != 1))
+            if ($entry->is_masked($this->filter))
                 continue;
 
-            // Create the entry
-            $entry = array(
-                'name' => $file,
-                'type' => $file_info['type'],
-                'uri' => '',
-                'size' => $file_info['size'],
-                'size_str' => $file_info['size_str'],
-                'mtime' => $file_info['mtime'],
-                'mtime_str' => $file_info['mtime_str']
-            );
+            // Create URI
             if (is_dir($file_path)) {
-                $entry['uri'] = $this->get_chdir_uri($file);
+                $entry->uri = $this->get_chdir_uri($file);
             } else {
-                $entry['uri'] = $this->folder_uri . '/' . $file;
+                $entry->uri = $this->folder_uri . '/' . $file;
             }
 
             // Put entry on correct list
-            if (is_dir($file_path))
+            if ($entry->is_dir())
                 array_push($dir_list, $entry);
             else
                 array_push($file_list, $entry);
@@ -337,68 +608,16 @@ class bootstrap_file_list
         // Add .. entry, except when we are at top-level
         $pre_entries = array();
         if ($this->sanitize_sub_path($this->sub_folder) != '') {
-            $entry = array(
-                'name' => '..',
-                'type' => 'dir',
-                'uri' => $this->get_chdir_uri('..'),
-                'size_str' => 0,
-                'size_str' => '-',
-                'mtime' => false,
-                'mtime_str' => '-'
-            );
+            $entry = file_info::create_up();
+            $entry->uri = $this->get_chdir_uri('..');
             array_push($pre_entries, $entry);
         }
 
+        $sorting = $this->sanitize_sorting($this->sorting);
         return array_merge(
             $pre_entries,
-            $this->sort_entries($dir_list),
-            $this->sort_entries($file_list)
-        );
-    }
-
-    /**
-     * @brief File information is retrieved
-     *
-     * Following file information are gathered: File size, last modification time, type
-     * (directory or file)
-     *
-     * Both size and modification time are converted to strings. The size is printed in
-     * a human readable format (Bytes, kiB, MiB, ...). The rounding precision can be set
-     * in @c rounding_precision and is set to @c 2 by default.
-     *
-     * The time is printed in "Y-m-d, H:i:s O".
-     *
-     * @param file_path Path to the file
-     * @param rounding_precision Number of digits after the decimal point
-     * @return File information entry
-     */
-    private static function get_file_info($file_path, $rounding_precision = 2)
-    {
-        // Query file stats
-        $stats = stat($file_path);
-
-        // Convert size to human readable notation
-        $size = $stats['size'];
-        if ($size >= pow(2, 50))
-            $str = round($size / pow(2, 50), $rounding_precision) . ' PiB';
-        elseif ($size >= pow(2, 40))
-            $str = round($size / pow(2, 40), $rounding_precision) . ' TiB';
-        elseif ($size >= pow(2, 30))
-            $str = round($size / pow(2, 30), $rounding_precision) . ' GiB';
-        elseif ($size >= pow(2, 20))
-            $str = round($size / pow(2, 20), $rounding_precision) . ' MiB';
-        elseif ($size >= pow(2, 10))
-            $str = round($size / pow(2, 10), $rounding_precision) . ' kiB';
-        else
-            $str = $size . ' Bytes';
-
-        // Return info dict
-        return array(
-            'size' => is_dir($file_path) ? 0 : $size,
-            'size_str' => is_dir($file_path) ? '-' : $str,
-            'type' => is_dir($file_path) ? 'dir' : 'file',
-            'mtime' => $stats['mtime'],
-            'mtime_str' => date('Y-m-d, H:i:s O', $stats['mtime'])
+            file_info::sort($dir_list, $sorting),
+            file_info::sort($file_list, $sorting)
         );
     }
 
@@ -411,7 +630,7 @@ class bootstrap_file_list
      * @param rel_path Desired sub-folder path, relative path to current location
      * @return URI with sorting key applied
      */
-    private function get_chdir_uri($rel_path)
+    private function get_chdir_uri(string $rel_path)
     {
         // Generate URI with modified path
         return add_query_arg(
@@ -423,72 +642,6 @@ class bootstrap_file_list
     }
 
     /**
-     * @brief Sort a file list
-     *
-     * A list of files is sorted. The sorting is controlled by the @c sorting property
-     * as follows:
-     * * If @c sorting is @c name_asc: The list is sorted by the file name in ascending order.
-     * * If @c sorting is @c name_des: The list is sorted by the file name in descending order.
-     * * If @c sorting is @c mtime_asc: The list is sorted by the modification date in ascending order.
-     *   If two or more files were modified at the same time, they will be sorted by the file name in
-     *   ascending order.
-     * * If @c sorting is @c mtime_des: The list is sorted by the modification date in descending order.
-     *   If two or more files were modified at the same time, they will be sorted by the file name in
-     *   descending order.
-     * * If @c sorting is @c size_asc: The list is sorted by the file size in ascending order.
-     *   If two or more files are of same size, they will be sorted by the file name in
-     *   ascending order.
-     * * If @c sorting is @c size_des: The list is sorted by the file size in descending order.
-     *   If two or more files are of same size, they will be sorted by the file name in
-     *   descending order.
-     *
-     * @param entries Unsorted list of file entries
-     * @return Sorted list of file entries
-     */
-    private function sort_entries($entries)
-    {
-        usort($entries, function ($a, $b) {
-            switch ($this->sanitize_sorting($this->sorting)) {
-            case 'name_asc':
-                return strcmp($a['name'], $b['name']);
-            case 'name_des':
-                return strcmp($b['name'], $a['name']);
-            case 'mtime_asc':
-                if ($a['mtime'] < $b['mtime'])
-                    return -1;
-                elseif ($a['mtime'] > $b['mtime'])
-                    return 1;
-                else
-                    return strcmp($a['name'], $b['name']);
-            case 'mtime_des':
-                if ($a['mtime'] < $b['mtime'])
-                    return 1;
-                elseif ($a['mtime'] > $b['mtime'])
-                    return -1;
-                else
-                    return strcmp($b['name'], $a['name']);
-            case 'size_asc':
-                if ($a['size'] < $b['size'])
-                    return -1;
-                elseif ($a['size'] > $b['size'])
-                    return 1;
-                else
-                    return strcmp($a['name'], $b['name']);
-            case 'size_des':
-                if ($a['size'] < $b['size'])
-                    return 1;
-                elseif ($a['size'] > $b['size'])
-                    return -1;
-                else
-                    return strcmp($b['name'], $a['name']);
-            default:
-                throw new LogicException('Invalid sorting');
-            }
-        });
-        return $entries;
-    }
-
-    /**
      * @brief An paragraph containing the current path is printed
      *
      * The location can be printed in front of the file table. It contains the
@@ -497,7 +650,7 @@ class bootstrap_file_list
      *
      * @return HTML code
      */
-    private function make_location()
+    private function make_location(): string
     {
         // Print current path
         $location = explode('/', $this->sanitize_sub_path($this->sub_folder));
@@ -525,7 +678,7 @@ class bootstrap_file_list
      * @param file_list List of files
      * @return HTML code
      */
-    private function make_table($file_list)
+    private function make_table(array $file_list): string
     {
         $html = '<table class="table">';
 
@@ -545,21 +698,21 @@ class bootstrap_file_list
             $html .= '<tr>';
 
             // Type
-            if ($entry['type'] == 'dir')
+            if ($entry->type == 'dir')
                 $html .= '<td><span class="oi oi-folder" aria-hidden="true"></span></td>';
-            elseif ($entry['type'] == 'file')
+            elseif ($entry->type == 'file')
                 $html .= '<td><span class="oi oi-document" aria-hidden="true"></span></td>';
             else
                 $html .= '<td></td>';
 
             // Name with download link
-            $html .= '<td><a href="'.$entry['uri'].'">'.$entry['name'].'</a></td>';
+            $html .= '<td><a href="'.$entry->uri.'">'.$entry->name.'</a></td>';
 
             // Information
             if ($this->show_size)
-                $html .= '<td>'.$entry['size_str'].'</td>';
+                $html .= '<td>'.$entry->human_readable_size().'</td>';
             if ($this->show_mtime)
-                $html .= '<td>'.$entry['mtime_str'].'</td>';
+                $html .= '<td>'.$entry->mtime_string().'</td>';
 
             $html .= '</tr>';
         }
@@ -580,7 +733,7 @@ class bootstrap_file_list
      * @param path Desired sub-folder path, full relative path from top-level folder
      * @return URI with sorting key applied
      */
-    private function get_setdir_uri($path)
+    private function get_setdir_uri(string $path)
     {
         // Generate URI with modified path
         return add_query_arg(
@@ -603,7 +756,7 @@ class bootstrap_file_list
      * @param sort_key Sorting key of the field, without @c _asc or @c _des suffix
      * @return HTML code
      */
-    private function make_table_head_entry($text, $sort_key)
+    private function make_table_head_entry(string $text, string $sort_key): string
     {
         $sorting = $this->sanitize_sorting($this->sorting);
 
@@ -625,7 +778,7 @@ class bootstrap_file_list
      * @param sorting Desired sorting key
      * @return URI with sorting key applied
      */
-    private function get_sort_uri($sorting)
+    private function get_sort_uri(string $sorting)
     {
         // Generate URI with modified sorting key
         return add_query_arg(
@@ -641,7 +794,7 @@ class bootstrap_file_list
      *
      * @return HTML code
      */
-    public function get_html()
+    public function get_html(): string
     {
         $this->make_folder_dir_info();
         $file_list = $this->get_file_list();
@@ -652,7 +805,25 @@ class bootstrap_file_list
     }
 }
 
-// Register plugin at init hook
-add_action('init', 'bootstrap_file_list::init_hook', 5);
 
+/**
+ * @brief Init hook of the plugin
+ *
+ * The init hook registers the shortcode @c BSFileList
+ */
+function init_hook(): void
+{
+    add_shortcode(
+        'BSFileList',
+        '\bootstrap_file_list\bootstrap_file_list::shortcode_BSFileList'
+    );
+}
+
+
+} /* namespace bootstrap_file_list */
+
+namespace {
+// Register plugin at init hook
+add_action('init', '\bootstrap_file_list\init_hook', 5);
+}
 ?>
