@@ -10,7 +10,7 @@
  * Author URI:        https://www.github.com/pl33
  * License:           GPL v2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       my-basics-plugin
+ * Text Domain:       bootstrap-file-list
  * Domain Path:       /languages
  *
  * Copyright (c) 2020 Philipp Le
@@ -687,7 +687,7 @@ class bootstrap_file_list
     {
         // Print current path
         $location = explode('/', $this->sanitize_sub_path($this->sub_folder));
-        $html = '<p><strong>Location:';
+        $html = '<p><strong>'.__('Location', 'bootstrap-file-list').':';
         $html .= ' &nbsp; <span class="oi oi-folder" aria-hidden="true"></span><a href="'.$this->get_setdir_uri('').'"> /</a>';
         $current_path = array();
         foreach ($location as $dir) {
@@ -718,11 +718,11 @@ class bootstrap_file_list
         // Print table head with sorting options
         $html .= '<thead><tr>';
         $html .= '<th width="30"></th>';
-        $html .= '<th>'.$this->make_table_head_entry('Name', 'name').'</th>';
+        $html .= '<th>'.$this->make_table_head_entry(__('Name', 'bootstrap-file-list'), 'name').'</th>';
         if ($this->show_size)
-            $html .= '<th width="20%">'.$this->make_table_head_entry('Size', 'size').'</th>';
+            $html .= '<th width="20%">'.$this->make_table_head_entry(__('Size', 'bootstrap-file-list'), 'size').'</th>';
         if ($this->show_mtime)
-            $html .= '<th width="30%">'.$this->make_table_head_entry('Modified', 'mtime').'</th>';
+            $html .= '<th width="30%">'.$this->make_table_head_entry(__('Modified', 'bootstrap-file-list'), 'mtime').'</th>';
         $html .= '</tr></thead>';
 
         // Print entries
@@ -852,11 +852,20 @@ function init_hook(): void
     );
 }
 
+/**
+ * Loads the translation files for the plugin.
+ */
+function load_textdomain_hook(): void
+{
+    load_plugin_textdomain('bootstrap-file-list', false, basename(dirname(__FILE__)).'/languages/');
+}
+
 
 } /* namespace bootstrap_file_list */
 
 namespace {
 // Register plugin at init hook
 add_action('init', '\bootstrap_file_list\init_hook', 5);
+add_action('plugins_loaded', '\bootstrap_file_list\load_textdomain_hook');
 }
 ?>

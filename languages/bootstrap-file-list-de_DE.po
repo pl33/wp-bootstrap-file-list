@@ -1,0 +1,32 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2020-03-06 00:58+0100\n"
+"PO-Revision-Date: 2020-03-06 01:08+0100\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.3\n"
+"X-Poedit-Basepath: ..\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Poedit-KeywordsList: __\n"
+"X-Poedit-SearchPath-0: bootstrap-file-list.php\n"
+
+#: bootstrap-file-list.php:690
+msgid "Location"
+msgstr "Pfad"
+
+#: bootstrap-file-list.php:721
+msgid "Name"
+msgstr "Name"
+
+#: bootstrap-file-list.php:723
+msgid "Size"
+msgstr "Gr&ouml;&szlig;e"
+
+#: bootstrap-file-list.php:725
+msgid "Modified"
+msgstr "&Auml;nderung"
