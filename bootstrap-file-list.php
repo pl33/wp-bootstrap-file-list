@@ -316,6 +316,39 @@ class file_info
  * Files can be filtered by regular expressions. The list can be sorted and it
  * is possible to navigate into sub-folders.
  *
+ * To use the plugin just add
+ * @code
+ * [BSFileList folder="/" filter="" sorting="name_asc" show_size="true" show_mtime="false"]
+ * @endcode
+ * to your Wordpress post or page content.
+ *
+ * wp-content/uploads/ or every folder below can be selected as the base folder by
+ * the @c folder option.
+ *
+ * @c show_size and @c show_mtime enable or disable displaying the file size and the
+ * modification time, respectively.
+ *
+ * @c filter can be set to any regular expression, which filter the files and only
+ * shows the matching ones. Directories are not filtered.
+ *
+ * @c sorting defines the initial sorting of the view.
+ * * If @c sorting is @c name_asc: The list is sorted by the file name in ascending order.
+ * * If @c sorting is @c name_des: The list is sorted by the file name in descending order.
+ * * If @c sorting is @c mtime_asc: The list is sorted by the modification date in ascending order.
+ *   If two or more files were modified at the same time, they will be sorted by the file name in
+ *   ascending order.
+ * * If @c sorting is @c mtime_des: The list is sorted by the modification date in descending order.
+ *   If two or more files were modified at the same time, they will be sorted by the file name in
+ *   descending order.
+ * * If @c sorting is @c size_asc: The list is sorted by the file size in ascending order.
+ *   If two or more files are of same size, they will be sorted by the file name in
+ *   ascending order.
+ * * If @c sorting is @c size_des: The list is sorted by the file size in descending order.
+ *   If two or more files are of same size, they will be sorted by the file name in
+ *   descending order.
+ *
+ * The above code example shows the default values.
+ *
  * The file list view can be customized by values set in the $_GET array. See
  * bootstrap_file_list::get_sub_key() and bootstrap_file_list::get_sorting_key()
  * for details.
